@@ -15,6 +15,7 @@ const makerPackageName = "electron-forge-maker-appimage";
 interface AppImageForgeConfig {
   template?: string;
   chmodChromeSandbox?: string;
+  icon?: string;
 }
 
 const isIForgeResolvableMaker = (
@@ -24,7 +25,7 @@ const isIForgeResolvableMaker = (
 };
 
 export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
-  name = "appImage";
+  name = "AppImage"; // "appImage" really annoyed me ;)
 
   defaultPlatforms: ForgePlatform[] = ["linux"];
 
@@ -33,12 +34,12 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
   }
 
   async make({
-    dir, // '/home/build/Software/monorepo/packages/electron/out/name-linux-x64'
-    appName, // 'name'
-    makeDir, // '/home/build/Software/monorepo/packages/electron/out/make',
-    targetArch, // 'x64'
+    dir, // eg. '/home/build/Software/monorepo/packages/electron/out/name-linux-x64'
+    appName, // eg. 'name'
+    makeDir, // eg. '/home/build/Software/monorepo/packages/electron/out/make',
+    targetArch, // eg. 'x64'
     packageJSON,
-    targetPlatform, //'linux',
+    targetPlatform, // == 'linux'
     forgeConfig
   }: MakerOptions) {
     const executableName = forgeConfig.packagerConfig.executableName || appName;
@@ -53,9 +54,10 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
     if (maker !== undefined && isIForgeResolvableMaker(maker)) {
       config = maker.config;
     }
-
-    const appFileName = `${appName}-${packageJSON.version}.AppImage`;
-    const appPath = path.join(makeDir, appFileName);
+    
+    const outDir = path.join(makeDir, "AppImage", targetArch)
+    const appFileName = `${packageJSON.name}-${packageJSON.version}-${targetArch}.AppImage`;
+    const appPath = path.join(outDir, appFileName);
 
     // construct the desktop file.
     const desktopMeta: { [parameter: string]: string } = {
@@ -76,29 +78,45 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
     }
     desktopEntry += "\n";
 
-    // icons don't seem to work in AppImages anyway. this is just the default taken from the old AppImage maker.
-    const iconPath = path.join(
-      dir,
-      "../..",
-      "node_modules/app-builder-lib/templates/icons/electron-linux"
-    );
-    const icons = [
-      { file: `${iconPath}/16x16.png`, size: 16 },
-      { file: `${iconPath}/32x32.png`, size: 32 },
-      { file: `${iconPath}/48x48.png`, size: 48 },
-      { file: `${iconPath}/64x64.png`, size: 64 },
-      { file: `${iconPath}/128x128.png`, size: 128 },
-      { file: `${iconPath}/256x256.png`, size: 256 }
-    ];
+    /* 
+     * This/these icon/-s will be visible with AppImage thumbnailer
+     * installed (at least that's the case for Gnome/XFCE4).
+     */
+    let icons: any;
+    if (config !== undefined && config.icon !== undefined) {
+      const iconPath = path.join(
+        dir,
+        "../.."
+      );
+      icons = [
+        { "file": `${iconPath}/${config.icon}`, "size": 0 }
+      ];
+    } else {
+      // default Electron icons when "config.icon" isn't definied:
+      const iconPath = path.join(
+        dir,
+        "../..",
+        "node_modules/app-builder-lib/templates/icons/electron-linux"
+      );
+      icons = [
+        { file: `${iconPath}/16x16.png`, size: 16 },
+        { file: `${iconPath}/32x32.png`, size: 32 },
+        { file: `${iconPath}/48x48.png`, size: 48 },
+        { file: `${iconPath}/64x64.png`, size: 64 },
+        { file: `${iconPath}/128x128.png`, size: 128 },
+        { file: `${iconPath}/256x256.png`, size: 256 }
+      ];
+    }
+    const iconFiles = icons;
 
-    const stageDir = path.join(makeDir, "__appImage-x64");
-
-    if (!existsSync(makeDir)) {
-      mkdirSync(makeDir, { recursive: true });
+    const stageDir = path.join(makeDir, `.temp-AppImage-${targetArch}`);
+    
+    if (!existsSync(outDir)) {
+      mkdirSync(outDir, { recursive: true });
     }
 
     if (existsSync(stageDir)) {
-      rmdirSync(stageDir);
+      rmdirSync(stageDir, { recursive: true });
     }
     mkdirSync(stageDir, { recursive: true });
 
@@ -110,13 +128,13 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
 
     const args = [
       "appimage",
-      "--stage", // '/home/build/Software/monorepo/packages/electron/out/make/__appImage-x64',
+      "--stage",
       stageDir,
-      "--arch", // 'x64'
-      "x64",
-      "--output", // '/home/build/Software/monorepo/packages/electron/out/make/name-2.0.6.AppImage',
+      "--arch",
+      targetArch,
+      "--output",
       appPath,
-      "--app", // '/home/build/Software/monorepo/packages/electron/out/name-linux-x64',
+      "--app",
       dir,
       "--configuration",
       JSON.stringify({
@@ -124,7 +142,7 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
         productFilename: appName,
         desktopEntry: desktopEntry,
         executableName: executableName,
-        icons: icons,
+        icons: iconFiles,
         fileAssociations: []
       })
     ];
