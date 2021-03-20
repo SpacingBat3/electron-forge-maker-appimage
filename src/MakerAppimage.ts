@@ -58,7 +58,7 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
     let genericName:string = appName;
     let desktopCategories:string = "Utility";
     let imageVersion:string = packageJSON.version;
-    let compression:string = "xz";
+    let compression:string|null = null;
     let options:MakerAppImageConfigOptions|undefined = undefined;
 
     if (maker !== undefined && isIForgeResolvableMaker(maker)) {
@@ -66,21 +66,25 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
     }
     if (config !== undefined && config.options !== undefined) {
       options = config.options;
-      if (config.options.bin !== undefined) {
-        binName = config.options.bin;
+      if (options.bin !== undefined) {
+        binName = options.bin;
       }
-      if (config.options.categories !== undefined) {
-        desktopCategories = config.options.categories.join(";");
+      if (options.categories !== undefined) {
+        desktopCategories = options.categories.join(";");
       }
-      if (config.options.version !== undefined) {
-        imageVersion = config.options.version;
+      if (options.version !== undefined) {
+        imageVersion = options.version;
       }
-      if (config.options.compression !== undefined) {
-        compression = config.options.compression;
+      if (options.compression !== undefined) {
+        compression = options.compression;
       }
-      if (config.options.name !== undefined) {
-        desktopName = config.options.name;
-        genericName = config.options.name;
+      if (options.name !== undefined) {
+        desktopName = options.name;
+      }
+      if (options.genericName !== undefined){
+        genericName = options.genericName
+      } else if (desktopName !== appName) {
+        genericName = desktopName
       }
     }
 
@@ -169,8 +173,6 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
       appPath,
       "--app",
       dir,
-      "--compression",
-      "xz",
       "--configuration",
       JSON.stringify({
         productName: appName,
@@ -181,6 +183,12 @@ export default class MakerAppImage extends MakerBase<MakerAppImageConfig> {
         fileAssociations: []
       })
     ];
+
+    // Custom compression alogrithm, parsed to MKSQUASHFS (default: gzip):
+    if (compression !== null) {
+      args.push("--compression");
+      args.push(compression);
+    }
 
     // the --template option allows us to replace AppRun bash script with a custom version, e.g. a libstdc++ bootstrapper.
     if (config !== undefined && config.template) {
